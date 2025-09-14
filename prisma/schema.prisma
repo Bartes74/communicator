@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  username         String    @unique
+  displayName      String
+  passwordHash     String
+  avatarUrl        String?
+  bio              String?   @db.VarChar(300)
+  status           UserStatus @default(ONLINE)
+  lastSeenAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  invitesSent      Invite[]  @relation("InvitesSent")
+  invitesReceived  Invite[]  @relation("InvitesReceived")
+  conversations    ConversationMember[]
+  messages         Message[]
+  reactions        Reaction[]
+}
+
+enum UserStatus {
+  ONLINE
+  BUSY
+  AWAY
+  INVISIBLE
+}
+
+model Invite {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  expiresAt     DateTime
+  revoked       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  inviterId     String
+  inviter       User     @relation("InvitesSent", fields: [inviterId], references: [id])
+
+  inviteeEmail  String?
+  consumedById  String?
+  consumedBy    User?    @relation("InvitesReceived", fields: [consumedById], references: [id])
+  consumedAt    DateTime?
+}
+
+model Conversation {
+  id           String                 @id @default(cuid())
+  isGroup      Boolean                @default(false)
+  name         String?
+  avatarUrl    String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  members      ConversationMember[]
+  messages     Message[]
+}
+
+model ConversationMember {
+  id              String        @id @default(cuid())
+  conversationId  String
+  userId          String
+  role            MemberRole    @default(MEMBER)
+  joinedAt        DateTime      @default(now())
+  mutedUntil      DateTime?
+
+  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+  user            User          @relation(fields: [userId], references: [id])
+
+  @@unique([conversationId, userId])
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Message {
+  id              String        @id @default(cuid())
+  conversationId  String
+  senderId        String
+  type            MessageType   @default(TEXT)
+  text            String?
+  mediaUrl        String?
+  mediaMime       String?
+  replyToId       String?
+  editedAt        DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime      @default(now())
+
+  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+  sender          User          @relation(fields: [senderId], references: [id])
+  replyTo         Message?      @relation("MessageReply", fields: [replyToId], references: [id])
+  replies         Message[]     @relation("MessageReply")
+
+  reactions       Reaction[]
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  VOICE
+}
+
+model Reaction {
+  id          String   @id @default(cuid())
+  messageId   String
+  userId      String
+  emoji       String
+  createdAt   DateTime @default(now())
+
+  message     Message  @relation(fields: [messageId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, emoji])
+}
+
