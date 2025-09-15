@@ -6,6 +6,7 @@ import { getIO } from '../../realtime';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import sharp from 'sharp';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -126,6 +127,20 @@ router.post('/:conversationId/media', requireAuth, upload.single('file'), async 
     }
   }
 
+  let thumbnailUrl: string | null = null;
+  if (type === MessageType.IMAGE) {
+    try {
+      const thumbsDir = path.join(process.cwd(), 'uploads', 'thumbs');
+      try { fs.mkdirSync(thumbsDir, { recursive: true }); } catch {}
+      const thumbName = `${path.parse(file.filename).name}-thumb.jpg`;
+      const thumbPath = path.join(thumbsDir, thumbName);
+      await sharp(file.path).resize(512, 512, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toFile(thumbPath);
+      thumbnailUrl = `/uploads/thumbs/${thumbName}`;
+    } catch (e) {
+      console.error('Thumbnail generation failed', e);
+    }
+  }
+
   const msg = await prisma.message.create({
     data: {
       conversationId,
@@ -134,6 +149,7 @@ router.post('/:conversationId/media', requireAuth, upload.single('file'), async 
       text: caption ?? null,
       mediaUrl: relUrl,
       mediaMime: mime,
+      thumbnailUrl,
     },
   });
   const io = getIO();
