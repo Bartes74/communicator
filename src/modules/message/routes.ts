@@ -3,6 +3,9 @@ import { PrismaClient, MessageType } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
 import { getIO } from '../../realtime';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -18,6 +21,34 @@ function requireAuth(req: any, res: any, next: any) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 }
+
+// Multer storage for media (100MB limit)
+const mediaDir = path.join(process.cwd(), 'uploads', 'media');
+try { fs.mkdirSync(mediaDir, { recursive: true }); } catch {}
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, mediaDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || '';
+      const name = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+      cb(null, name);
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    // Basic MIME allow-listing; detailed per-type checks occur after upload
+    const mime = file.mimetype || '';
+    if (mime.startsWith('image/') || mime.startsWith('audio/')) return cb(null, true);
+    const allowed = new Set([
+      'application/pdf',
+      'application/zip',
+      'application/x-zip-compressed',
+      'text/plain',
+    ]);
+    if (allowed.has(mime)) return cb(null, true);
+    return cb(new Error('Unsupported file type'));
+  },
+});
 
 router.get('/:conversationId', requireAuth, async (req: any, res) => {
   const { conversationId } = req.params as { conversationId: string };
@@ -53,6 +84,60 @@ router.post('/:conversationId', requireAuth, async (req: any, res) => {
   if (io) {
     io.to(`conv:${conversationId}`).emit('message:new', msg);
   }
+  res.status(201).json(msg);
+});
+
+// Upload media (image/file/voice)
+router.post('/:conversationId/media', requireAuth, upload.single('file'), async (req: any, res) => {
+  const { conversationId } = req.params as { conversationId: string };
+  const file = req.file as Express.Multer.File | undefined;
+  const { caption } = (req.body as any) as { caption?: string };
+  if (!file) return res.status(400).json({ error: 'No file' });
+  const mime = file.mimetype || 'application/octet-stream';
+  const relUrl = `/uploads/media/${file.filename}`;
+  let type: MessageType = MessageType.FILE;
+  if (mime.startsWith('image/')) type = MessageType.IMAGE;
+  else if (mime.startsWith('audio/')) type = MessageType.VOICE;
+
+  // Per-type validation sizes and mime
+  const maxImage = 10 * 1024 * 1024; // 10MB
+  const maxAudio = 20 * 1024 * 1024; // 20MB
+  const maxFile = 100 * 1024 * 1024; // 100MB (overall limit)
+  const allowedImages = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+  const allowedAudio = new Set(['audio/mpeg', 'audio/ogg', 'audio/webm', 'audio/wav', 'audio/mp4']);
+
+  function rejectWithCleanup(message: string, status = 400) {
+    try { fs.unlinkSync(file.path); } catch {}
+    return res.status(status).json({ error: message });
+  }
+
+  if (type === MessageType.IMAGE) {
+    if (!allowedImages.has(mime)) return rejectWithCleanup('Unsupported image type');
+    if (file.size > maxImage) return rejectWithCleanup('Image too large (max 10MB)', 413);
+  } else if (type === MessageType.VOICE) {
+    if (!allowedAudio.has(mime)) return rejectWithCleanup('Unsupported audio type');
+    if (file.size > maxAudio) return rejectWithCleanup('Audio too large (max 20MB)', 413);
+  } else {
+    if (file.size > maxFile) return rejectWithCleanup('File too large (max 100MB)', 413);
+    const allowedFiles = new Set(['application/pdf', 'application/zip', 'application/x-zip-compressed', 'text/plain']);
+    if (!allowedFiles.has(mime)) {
+      // keep conservative for MVP
+      return rejectWithCleanup('Unsupported file type');
+    }
+  }
+
+  const msg = await prisma.message.create({
+    data: {
+      conversationId,
+      senderId: req.userId,
+      type,
+      text: caption ?? null,
+      mediaUrl: relUrl,
+      mediaMime: mime,
+    },
+  });
+  const io = getIO();
+  if (io) io.to(`conv:${conversationId}`).emit('message:new', msg);
   res.status(201).json(msg);
 });
 
