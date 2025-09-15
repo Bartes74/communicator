@@ -7,6 +7,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
+import { parseFile } from 'music-metadata';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -128,6 +129,7 @@ router.post('/:conversationId/media', requireAuth, upload.single('file'), async 
   }
 
   let thumbnailUrl: string | null = null;
+  let durationSeconds: number | null = null;
   if (type === MessageType.IMAGE) {
     try {
       const thumbsDir = path.join(process.cwd(), 'uploads', 'thumbs');
@@ -138,6 +140,15 @@ router.post('/:conversationId/media', requireAuth, upload.single('file'), async 
       thumbnailUrl = `/uploads/thumbs/${thumbName}`;
     } catch (e) {
       console.error('Thumbnail generation failed', e);
+    }
+  } else if (type === MessageType.VOICE) {
+    try {
+      const meta = await parseFile(file.path);
+      if (meta && meta.format && typeof meta.format.duration === 'number') {
+        durationSeconds = Math.round(meta.format.duration);
+      }
+    } catch (e) {
+      console.error('Audio metadata parse failed', e);
     }
   }
 
@@ -150,6 +161,7 @@ router.post('/:conversationId/media', requireAuth, upload.single('file'), async 
       mediaUrl: relUrl,
       mediaMime: mime,
       thumbnailUrl,
+      durationSeconds,
     },
   });
   const io = getIO();

@@ -99,6 +99,7 @@ model Message {
   mediaUrl        String?
   mediaMime       String?
   thumbnailUrl    String?
+  durationSeconds Int?
   replyToId       String?
   editedAt        DateTime?
   deletedAt       DateTime?

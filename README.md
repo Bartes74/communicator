@@ -65,10 +65,7 @@ Wiadomości – edycja, usuwanie, reakcje, paginacja:
   - `POST /api/messages/:conversationId` – wysyłka wiadomości tekstowej `{ text, replyToId? }`
   - `POST /api/messages/:conversationId/media` – upload pliku (`multipart/form-data`, pole `file`, opcjonalnie `caption`) – limity: obraz do 10MB (jpeg/png/gif/webp), audio do 20MB (mp3/ogg/webm/wav/mp4), inne pliki do 100MB (pdf/zip/txt)
   - Dla obrazów automatycznie generowana jest miniatura 512px (JPEG ~80% jakości). Zwracane pola w obiekcie wiadomości: `mediaUrl`, `mediaMime`, `thumbnailUrl`.
-  - `PATCH /api/messages/item/:messageId` – edycja wiadomości (autor lub admin) `{ text }`
-  - `DELETE /api/messages/item/:messageId` – soft delete (autor lub admin)
-  - `POST /api/messages/item/:messageId/reactions` – dodanie reakcji `{ emoji }`
-  - `DELETE /api/messages/item/:messageId/reactions?emoji=...` – usunięcie własnej reakcji
+  - Wiadomości głosowe: dla przesłanych plików audio zapisywane jest pole `durationSeconds` (oszacowane z metadanych pliku).
 - Socket.IO (po dołączeniu do pokoju `conversation:join` → `conv:<conversationId>`):
   - `message:new` payload: pełny obiekt wiadomości
   - `message:edited` payload: pełny obiekt wiadomości po edycji
