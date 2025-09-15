@@ -57,9 +57,22 @@ router.post('/register', async (req, res) => {
 
   await prisma.invite.update({ where: { id: invite.id }, data: { consumedById: user.id, consumedAt: new Date() } });
 
+  // Auto-create DM with inviter
+  const dm = await prisma.conversation.create({
+    data: {
+      isGroup: false,
+      members: {
+        create: [
+          { userId: invite.inviterId },
+          { userId: user.id },
+        ],
+      },
+    },
+  });
+
   const token = jwt.sign({ sub: user.id }, env.JWT_SECRET, { expiresIn: '7d' });
   res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: env.NODE_ENV === 'production', maxAge: 7 * 24 * 3600 * 1000 });
-  return res.status(201).json({ id: user.id, username: user.username, displayName: user.displayName });
+  return res.status(201).json({ id: user.id, username: user.username, displayName: user.displayName, dmId: dm.id });
 });
 
 const loginSchema = z.object({

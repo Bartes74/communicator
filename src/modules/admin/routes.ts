@@ -104,4 +104,41 @@ router.post('/users/:userId/invites/adjust', requireAuth, requireAdmin, async (r
 
 export default router;
 
+// Admin-only: list all invites
+router.get('/invites', requireAuth, requireAdmin, async (_req, res) => {
+  const all = await prisma.invite.findMany({ orderBy: { createdAt: 'desc' } });
+  res.json(all);
+});
+
+// Admin: reset monthly invitesRemaining for all users to config default
+router.post('/invites/reset-monthly', requireAuth, requireAdmin, async (_req, res) => {
+  const cfg = await prisma.appConfig.findFirst();
+  const value = cfg?.defaultInvitesPerUser ?? 5;
+  await prisma.user.updateMany({ data: { invitesRemaining: value } });
+  res.json({ ok: true, invitesRemaining: value });
+});
+
+// Admin: full invitations tree from a specific root user
+router.get('/invites/tree', requireAuth, requireAdmin, async (req, res) => {
+  const { userId } = (req.query as any) as { userId?: string };
+  const rootId = userId ?? (await prisma.user.findFirst({ where: { role: 'ADMIN' } }))?.id;
+  if (!rootId) return res.status(404).json({ error: 'Root not found' });
+  const all = await prisma.invite.findMany({ where: { consumedById: { not: null } } });
+  const byInviter = new Map<string, typeof all>();
+  all.forEach((i) => {
+    const list = byInviter.get(i.inviterId) ?? [];
+    list.push(i);
+    byInviter.set(i.inviterId, list);
+  });
+  function build(node: string): any {
+    const children = byInviter.get(node) ?? [];
+    return {
+      userId: node,
+      invited: children.map((c) => ({ inviteId: c.id, code: c.code, userId: c.consumedById!, children: build(c.consumedById!).invited })),
+    };
+  }
+  res.json(build(rootId));
+});
+
+
 

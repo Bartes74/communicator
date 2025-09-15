@@ -32,6 +32,23 @@ Endpointy podstawowe:
 - `GET /api/messages/:conversationId`
 - `POST /api/messages/:conversationId`
 
+Zaproszenia:
+- `GET /api/invites` – lista własnych zaproszeń
+- `GET /api/invites/summary` – podsumowanie (pozostałe, użyte, oczekujące)
+- `GET /api/invites/validate/:code` – walidacja kodu (ważność, zapraszający)
+- `GET /api/invites/tree` – drzewo „kto kogo zaprosił” od bieżącego użytkownika
+- `POST /api/invites` – utworzenie zaproszenia (domyślnie wygasa po 7 dniach)
+- `POST /api/invites/:code/revoke` – odwołanie niewykorzystanego zaproszenia
+
+Admin:
+- `POST /api/admin/bootstrap` – jednorazowe utworzenie konta admina (ENV: `ADMIN_BOOTSTRAP_SECRET`)
+- `GET /api/admin/config` – odczyt `defaultInvitesPerUser`
+- `PATCH /api/admin/config` – zmiana `defaultInvitesPerUser`
+- `POST /api/admin/users/:userId/invites/adjust` – korekta puli zaproszeń użytkownika
+- `GET /api/admin/invites` – lista wszystkich zaproszeń
+- `POST /api/admin/invites/reset-monthly` – reset puli wszystkich użytkowników do wartości domyślnej
+- `GET /api/admin/invites/tree` – globalne drzewo zaproszeń (opcjonalnie `?userId=` jako root)
+
 Socket.IO:
 - Rezerwacja pod zdarzenia: wiadomości realtime, typing, itp.
 

@@ -29,6 +29,62 @@ router.get('/', requireAuth, async (req: any, res) => {
   res.json(invites);
 });
 
+// Summary of own invites
+router.get('/summary', requireAuth, async (req: any, res) => {
+  const now = new Date();
+  const [me, createdTotal, used, pending] = await Promise.all([
+    prisma.user.findUnique({ where: { id: req.userId } }),
+    prisma.invite.count({ where: { inviterId: req.userId } }),
+    prisma.invite.count({ where: { inviterId: req.userId, consumedById: { not: null } } }),
+    prisma.invite.count({
+      where: {
+        inviterId: req.userId,
+        consumedById: null,
+        revoked: false,
+        expiresAt: { gt: now },
+      },
+    }),
+  ]);
+  res.json({ invitesRemaining: me?.invitesRemaining ?? 0, createdTotal, used, pending });
+});
+
+// Validate invite code
+router.get('/validate/:code', async (req, res) => {
+  const { code } = req.params as { code: string };
+  const invite = await prisma.invite.findUnique({ where: { code }, include: { inviter: true } });
+  if (!invite) return res.status(404).json({ valid: false, reason: 'NOT_FOUND' });
+  if (invite.revoked) return res.status(400).json({ valid: false, reason: 'REVOKED' });
+  if (invite.consumedById) return res.status(400).json({ valid: false, reason: 'USED' });
+  if (invite.expiresAt < new Date()) return res.status(400).json({ valid: false, reason: 'EXPIRED' });
+  return res.json({ valid: true, expiresAt: invite.expiresAt, inviter: { id: invite.inviterId, username: invite.inviter.username, displayName: invite.inviter.displayName } });
+});
+
+// Build invite tree (who invited whom) for current user or given userId
+router.get('/tree', requireAuth, async (req: any, res) => {
+  const userId = (req.query.userId as string | undefined) ?? req.userId;
+  const invites = await prisma.invite.findMany({
+    where: { OR: [{ inviterId: userId }, { consumedById: userId }] },
+  });
+  // To build full subtree, fetch all invites. For MVP keep limited breadth-first from the chosen root.
+  const allInvites = await prisma.invite.findMany({ where: { consumedById: { not: null } } });
+  const byInviter = new Map<string, typeof allInvites>();
+  allInvites.forEach((inv) => {
+    const key = inv.inviterId;
+    const list = byInviter.get(key) ?? [];
+    list.push(inv);
+    byInviter.set(key, list);
+  });
+  function build(nodeUserId: string): any {
+    const children = byInviter.get(nodeUserId) ?? [];
+    return {
+      userId: nodeUserId,
+      invited: children.map((c) => ({ inviteId: c.id, code: c.code, userId: c.consumedById!, children: build(c.consumedById!).invited })),
+    };
+  }
+  const tree = build(userId);
+  res.json(tree);
+});
+
 // Create invite
 const createSchema = z.object({
   email: z.string().email().optional(),
