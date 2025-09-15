@@ -9,6 +9,7 @@ import conversationRoutes from './modules/conversation/routes';
 import messageRoutes from './modules/message/routes';
 import adminRoutes from './modules/admin/routes';
 import inviteRoutes from './modules/invite/routes';
+import path from 'path';
 
 export const createApp = () => {
   const app = express();
@@ -16,6 +17,7 @@ export const createApp = () => {
   app.use(cors({ origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN, credentials: true }));
   app.use(express.json({ limit: '2mb' }));
   app.use(cookieParser());
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   app.get('/health', (_req, res) => {
     res.json({ ok: true, env: env.NODE_ENV });

@@ -18,6 +18,7 @@ model User {
   status           UserStatus @default(ONLINE)
   role             UserRole   @default(USER)
   invitesRemaining Int        @default(5)
+  showLastSeen     Boolean    @default(true)
   lastSeenAt       DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

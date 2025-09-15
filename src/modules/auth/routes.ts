@@ -94,6 +94,8 @@ router.post('/login', async (req, res) => {
   if (!ok) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
+  // update lastSeenAt on login
+  await prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } });
   const token = jwt.sign({ sub: user.id }, env.JWT_SECRET, { expiresIn: '7d' });
   res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: env.NODE_ENV === 'production', maxAge: 7 * 24 * 3600 * 1000 });
   return res.json({ id: user.id, username: user.username, displayName: user.displayName });
