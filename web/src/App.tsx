@@ -92,11 +92,32 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
   const [dark, setDark] = useState(true);
   const [typing, setTyping] = useState<Record<string, boolean>>({});
   const [onlineMap, setOnlineMap] = useState<Record<string, boolean>>({});
+  const [unread, setUnread] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('unread') || '{}'); } catch { return {}; }
+  });
+  const [lastReadAt, setLastReadAt] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('lastReadAt') || '{}'); } catch { return {}; }
+  });
   const socket = useMemo<Socket | null>(() => (token ? io('/', { auth: { token } }) : null), [token]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
   }, [dark]);
+
+  // persist unread and lastReadAt
+  useEffect(() => { localStorage.setItem('unread', JSON.stringify(unread)); }, [unread]);
+  useEffect(() => { localStorage.setItem('lastReadAt', JSON.stringify(lastReadAt)); }, [lastReadAt]);
+  // update title/app badge
+  useEffect(() => {
+    const total = Object.values(unread).reduce((a, b) => a + b, 0);
+    document.title = total > 0 ? `(${total}) Communicator` : 'Communicator';
+    // Badge API (optional)
+    // @ts-ignore
+    if (navigator.setAppBadge) {
+      // @ts-ignore
+      total > 0 ? navigator.setAppBadge(total).catch(() => {}) : navigator.clearAppBadge?.().catch?.(() => {});
+    }
+  }, [unread]);
 
   useEffect(() => {
     (async () => {
@@ -130,6 +151,9 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
       const { data } = await api.get(`/messages/${currentId}?take=50`);
       setMessages(data.items);
       socket?.emit('conversation:join', currentId);
+      // mark as read
+      setUnread((u) => ({ ...u, [currentId]: 0 }));
+      setLastReadAt((m) => ({ ...m, [currentId]: Date.now() }));
     })();
     return () => {
       socket?.emit('conversation:leave', currentId);
@@ -141,6 +165,9 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
     const onNew = (m: any) => {
       if (m.conversationId === currentId) setMessages((prev) => [...prev, m]);
       setConversations((prev) => prev.map((c) => (c.id === m.conversationId ? { ...c, messages: [m] } : c)));
+      if (m.conversationId !== currentId && m.senderId !== me?.id) {
+        setUnread((u) => ({ ...u, [m.conversationId]: (u[m.conversationId] || 0) + 1 }));
+      }
     };
     const onEdited = (m: any) => {
       setMessages((prev) => prev.map((x) => (x.id === m.id ? m : x)));
@@ -202,13 +229,17 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
             const other = c.members?.map((m: any) => m.user).find((u: any) => u.id !== me?.id);
             const isTyping = typing[c.id];
             const online = other ? onlineMap[other.id] : false;
+            const count = unread[c.id] || 0;
             return (
               <button key={c.id} onClick={() => setCurrentId(c.id)} className={`w-full text-left px-3 py-2 rounded ${currentId===c.id?'bg-blue-600 text-white':'hover:bg-neutral-200 dark:hover:bg-neutral-800'}`}>
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{c.name || other?.displayName || 'Direct message'}</div>
                   {online && <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />}
                 </div>
-                <div className="text-sm opacity-70 truncate">{isTyping ? 'typing…' : subtitleFor(c)}</div>
+                <div className="text-sm opacity-70 truncate flex items-center gap-2">
+                  <span>{isTyping ? 'typing…' : subtitleFor(c)}</span>
+                  {count > 0 && <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-blue-600 text-white text-xs">{count}</span>}
+                </div>
               </button>
             );
           })}
