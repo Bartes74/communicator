@@ -23,7 +23,14 @@ function requireAuth(req: any, res: any, next: any) {
 router.get('/', requireAuth, async (req: any, res) => {
   const memberships = await prisma.conversationMember.findMany({
     where: { userId: req.userId },
-    include: { conversation: true },
+    include: {
+      conversation: {
+        include: {
+          members: { include: { user: true } },
+          messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        },
+      },
+    },
   });
   const conversations = memberships.map((m) => m.conversation);
   res.json(conversations);

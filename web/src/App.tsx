@@ -90,6 +90,8 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [dark, setDark] = useState(true);
+  const [typing, setTyping] = useState<Record<string, boolean>>({});
+  const [onlineMap, setOnlineMap] = useState<Record<string, boolean>>({});
   const socket = useMemo<Socket | null>(() => (token ? io('/', { auth: { token } }) : null), [token]);
 
   useEffect(() => {
@@ -122,10 +124,21 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
     if (!socket) return;
     const onNew = (m: any) => {
       if (m.conversationId === currentId) setMessages((prev) => [...prev, m]);
+      setConversations((prev) => prev.map((c) => (c.id === m.conversationId ? { ...c, messages: [m] } : c)));
+    };
+    const onTyping = (p: any) => {
+      setTyping((t) => ({ ...t, [p.conversationId]: p.typing }));
+    };
+    const onPresence = (p: any) => {
+      setOnlineMap((m) => ({ ...m, [p.userId]: p.online }));
     };
     socket.on('message:new', onNew);
+    socket.on('typing', onTyping);
+    socket.on('presence:online', onPresence);
     return () => {
       socket.off('message:new', onNew);
+      socket.off('typing', onTyping);
+      socket.off('presence:online', onPresence);
     };
   }, [socket, currentId]);
 
@@ -133,6 +146,15 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
     if (!text.trim() || !currentId) return;
     await api.post(`/messages/${currentId}`, { text });
     setText('');
+  }
+
+  function subtitleFor(c: any) {
+    const last = c.messages?.[0];
+    if (!last) return '';
+    if (last.type === 'IMAGE') return 'Photo';
+    if (last.type === 'VOICE') return `Voice${last.durationSeconds ? ` • ${last.durationSeconds}s` : ''}`;
+    if (last.type === 'FILE') return 'File';
+    return last.text ?? '';
   }
 
   return (
@@ -143,9 +165,20 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
           <button className="text-sm px-2 py-1 rounded bg-neutral-200 dark:bg-neutral-700" onClick={() => setDark((d) => !d)}>{dark ? 'Light' : 'Dark'}</button>
         </div>
         <div className="overflow-auto space-y-1">
-          {conversations.map((c) => (
-            <button key={c.id} onClick={() => setCurrentId(c.id)} className={`w-full text-left px-3 py-2 rounded ${currentId===c.id?'bg-blue-600 text-white':'hover:bg-neutral-200 dark:hover:bg-neutral-800'}`}>{c.name || 'Direct message'}</button>
-          ))}
+          {conversations.map((c) => {
+            const other = c.members?.map((m: any) => m.user).find((u: any) => u.id !== me?.id);
+            const isTyping = typing[c.id];
+            const online = other ? onlineMap[other.id] : false;
+            return (
+              <button key={c.id} onClick={() => setCurrentId(c.id)} className={`w-full text-left px-3 py-2 rounded ${currentId===c.id?'bg-blue-600 text-white':'hover:bg-neutral-200 dark:hover:bg-neutral-800'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="font-medium">{c.name || other?.displayName || 'Direct message'}</div>
+                  {online && <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />}
+                </div>
+                <div className="text-sm opacity-70 truncate">{isTyping ? 'typing…' : subtitleFor(c)}</div>
+              </button>
+            );
+          })}
         </div>
       </aside>
       <main className="flex flex-col h-full">
