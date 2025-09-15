@@ -49,6 +49,16 @@ Admin:
 - `POST /api/admin/invites/reset-monthly` – reset puli wszystkich użytkowników do wartości domyślnej
 - `GET /api/admin/invites/tree` – globalne drzewo zaproszeń (opcjonalnie `?userId=` jako root)
 
+Presence i „ostatnio widziany”:
+- Socket.IO connect: przekazuj `auth: { token: <JWT> }`. Zdarzenia globalne:
+  - `presence:online` payload `{ userId, online: boolean }`
+- HTTP:
+  - `GET /api/users/presence` – status online dla zalogowanego użytkownika
+  - `GET /api/users/presence/:id` – status online oraz `lastSeenAt` (gdy `showLastSeen=true` u danego użytkownika)
+- Aktualizacja `lastSeenAt`:
+  - na logowaniu i `GET /api/users/me`
+  - przy rozłączeniu ostatniego połączenia Socket.IO danego użytkownika
+
 Socket.IO:
 - Rezerwacja pod zdarzenia: wiadomości realtime, typing, itp.
 

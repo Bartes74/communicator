@@ -5,6 +5,7 @@ import { env } from '../../config/env';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import { isOnline } from './presence';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -57,6 +58,20 @@ router.post('/me/avatar', requireAuth, upload.single('avatar'), async (req: any,
   const relPath = `/uploads/avatars/${req.file.filename}`;
   const updated = await prisma.user.update({ where: { id: req.userId }, data: { avatarUrl: relPath } });
   res.json({ avatarUrl: updated.avatarUrl });
+});
+
+// Presence HTTP endpoints
+router.get('/presence', requireAuth, async (req: any, res) => {
+  const meOnline = isOnline(req.userId);
+  res.json({ userId: req.userId, online: meOnline });
+});
+
+router.get('/presence/:id', async (req, res) => {
+  const { id } = req.params as { id: string };
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) return res.status(404).json({ error: 'Not found' });
+  const online = isOnline(id);
+  res.json({ userId: id, online, lastSeenAt: user.showLastSeen ? user.lastSeenAt : null });
 });
 
 // Public profile
