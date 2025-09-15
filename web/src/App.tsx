@@ -126,6 +126,12 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
       if (m.conversationId === currentId) setMessages((prev) => [...prev, m]);
       setConversations((prev) => prev.map((c) => (c.id === m.conversationId ? { ...c, messages: [m] } : c)));
     };
+    const onEdited = (m: any) => {
+      setMessages((prev) => prev.map((x) => (x.id === m.id ? m : x)));
+    };
+    const onDeleted = (p: any) => {
+      setMessages((prev) => prev.filter((x) => x.id !== p.id));
+    };
     const onTyping = (p: any) => {
       setTyping((t) => ({ ...t, [p.conversationId]: p.typing }));
     };
@@ -133,10 +139,14 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
       setOnlineMap((m) => ({ ...m, [p.userId]: p.online }));
     };
     socket.on('message:new', onNew);
+    socket.on('message:edited', onEdited);
+    socket.on('message:deleted', onDeleted);
     socket.on('typing', onTyping);
     socket.on('presence:online', onPresence);
     return () => {
       socket.off('message:new', onNew);
+      socket.off('message:edited', onEdited);
+      socket.off('message:deleted', onDeleted);
       socket.off('typing', onTyping);
       socket.off('presence:online', onPresence);
     };
@@ -146,6 +156,13 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
     if (!text.trim() || !currentId) return;
     await api.post(`/messages/${currentId}`, { text });
     setText('');
+  }
+
+  async function sendMedia(file: File) {
+    if (!currentId) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    await api.post(`/messages/${currentId}/media`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   }
 
   function subtitleFor(c: any) {
@@ -197,6 +214,11 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
                   ) : (
                     <div>{m.text}</div>
                   )}
+                  <div className="text-xs opacity-70 mt-1 flex gap-2">
+                    <button onClick={async () => { const text = prompt('Edit message', m.text || ''); if (text!=null) await api.patch(`/messages/item/${m.id}`, { text }); }} className="underline">Edit</button>
+                    <button onClick={async () => { if (confirm('Delete message?')) await api.delete(`/messages/item/${m.id}`); }} className="underline">Delete</button>
+                    <button onClick={async () => { const emoji = prompt('Emoji', '👍'); if (emoji) await api.post(`/messages/item/${m.id}/reactions`, { emoji }); }} className="underline">React</button>
+                  </div>
                 </div>
               </div>
             );
@@ -204,6 +226,10 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
         </div>
         <div className="p-3 flex gap-2 border-t border-neutral-200 dark:border-neutral-800">
           <input value={text} onChange={(e) => setText(e.target.value)} onFocus={() => currentId && socket?.emit('typing:start', currentId)} onBlur={() => currentId && socket?.emit('typing:stop', currentId)} className="flex-1 px-3 py-2 rounded bg-white dark:bg-neutral-800" placeholder="iMessage" />
+          <label className="px-3 py-2 rounded bg-neutral-200 dark:bg-neutral-700 cursor-pointer">
+            <input type="file" className="hidden" onChange={(e) => e.target.files && sendMedia(e.target.files[0])} />
+            Attach
+          </label>
           <button onClick={sendMessage} className="px-4 py-2 rounded bg-blue-600 text-white">Send</button>
         </div>
       </main>
