@@ -10,6 +10,7 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(16),
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  ADMIN_BOOTSTRAP_SECRET: z.string().min(10).optional(),
 });
 
 export type AppEnv = z.infer<typeof EnvSchema>;

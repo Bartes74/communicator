@@ -31,18 +31,27 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Invite already used' });
   }
 
+  // Ensure inviter has reserved invite or has remaining (safety)
+  const inviter = await prisma.user.findUnique({ where: { id: invite.inviterId } });
+  if (!inviter) return res.status(400).json({ error: 'Invalid invite' });
+
   const existing = await prisma.user.findFirst({ where: { OR: [{ email }, { username }] } });
   if (existing) {
     return res.status(409).json({ error: 'Email or username already in use' });
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
+  // Fetch default invites from config
+  const appConfig = await prisma.appConfig.findFirst();
+  const defaultInvites = appConfig?.defaultInvitesPerUser ?? 5;
+
   const user = await prisma.user.create({
     data: {
       email,
       username,
       displayName,
       passwordHash,
+      invitesRemaining: defaultInvites,
     },
   });
 

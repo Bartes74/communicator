@@ -7,6 +7,8 @@ import authRoutes from './modules/auth/routes';
 import userRoutes from './modules/user/routes';
 import conversationRoutes from './modules/conversation/routes';
 import messageRoutes from './modules/message/routes';
+import adminRoutes from './modules/admin/routes';
+import inviteRoutes from './modules/invite/routes';
 
 export const createApp = () => {
   const app = express();
@@ -23,6 +25,8 @@ export const createApp = () => {
   app.use('/api/users', userRoutes);
   app.use('/api/conversations', conversationRoutes);
   app.use('/api/messages', messageRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/invites', inviteRoutes);
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     // Basic error handler

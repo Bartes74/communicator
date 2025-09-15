@@ -16,6 +16,8 @@ model User {
   avatarUrl        String?
   bio              String?   @db.VarChar(300)
   status           UserStatus @default(ONLINE)
+  role             UserRole   @default(USER)
+  invitesRemaining Int        @default(5)
   lastSeenAt       DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -32,6 +34,11 @@ enum UserStatus {
   BUSY
   AWAY
   INVISIBLE
+}
+
+enum UserRole {
+  ADMIN
+  USER
 }
 
 model Invite {
@@ -121,5 +128,12 @@ model Reaction {
   user        User     @relation(fields: [userId], references: [id])
 
   @@unique([messageId, userId, emoji])
+}
+
+model AppConfig {
+  id                      String   @id @default(cuid())
+  defaultInvitesPerUser   Int      @default(5)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }
 
