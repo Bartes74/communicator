@@ -6,6 +6,7 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import { isOnline } from './presence';
+import webpush from 'web-push';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -90,6 +91,26 @@ router.get('/:id', async (req, res) => {
     lastSeenAt: user.showLastSeen ? user.lastSeenAt : null,
     bio: user.bio ?? null,
   });
+});
+
+// Web Push subscribe/unsubscribe
+router.post('/push/subscribe', requireAuth, async (req: any, res) => {
+  const { endpoint, keys } = req.body as { endpoint: string; keys: { p256dh: string; auth: string } };
+  if (!endpoint || !keys?.p256dh || !keys?.auth) return res.status(400).json({ error: 'Invalid subscription' });
+  const existing = await prisma.pushSubscription.findUnique({ where: { endpoint } }).catch(() => null);
+  if (existing) {
+    await prisma.pushSubscription.update({ where: { endpoint }, data: { userId: req.userId, p256dh: keys.p256dh, auth: keys.auth } });
+  } else {
+    await prisma.pushSubscription.create({ data: { userId: req.userId, endpoint, p256dh: keys.p256dh, auth: keys.auth } });
+  }
+  res.json({ ok: true, vapidPublicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+router.post('/push/unsubscribe', requireAuth, async (req: any, res) => {
+  const { endpoint } = req.body as { endpoint: string };
+  if (!endpoint) return res.status(400).json({ error: 'Invalid subscription' });
+  await prisma.pushSubscription.delete({ where: { endpoint } }).catch(() => undefined);
+  res.json({ ok: true });
 });
 
 export default router;

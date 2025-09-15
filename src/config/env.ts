@@ -11,6 +11,9 @@ const EnvSchema = z.object({
   JWT_SECRET: z.string().min(16),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   ADMIN_BOOTSTRAP_SECRET: z.string().min(10).optional(),
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:admin@example.com'),
 });
 
 export type AppEnv = z.infer<typeof EnvSchema>;

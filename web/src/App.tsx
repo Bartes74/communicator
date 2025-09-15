@@ -105,6 +105,22 @@ function ChatPage({ api, token }: { api: ReturnType<typeof axios.create>; token:
       const conv = await api.get('/conversations');
       setConversations(conv.data);
       if (conv.data[0]) setCurrentId(conv.data[0].id);
+      // register service worker and subscribe push
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.register('/src/sw.js');
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          const existing = await reg.pushManager.getSubscription();
+          if (!existing) {
+            const vapidRes = await api.post('/users/push/subscribe', { endpoint: 'init' }).catch(() => ({ data: {} }));
+            const vapidKey = vapidRes?.data?.vapidPublicKey;
+            if (vapidKey) {
+              const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) });
+              await api.post('/users/push/subscribe', sub.toJSON());
+            }
+          }
+        }
+      }
     })();
   }, [api]);
 
@@ -251,6 +267,17 @@ export default function App() {
       )}
     </Routes>
   );
+}
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
 

@@ -8,6 +8,8 @@ import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
 import { parseFile } from 'music-metadata';
+import webpush from 'web-push';
+import { Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -88,6 +90,16 @@ router.post('/:conversationId', requireAuth, async (req: any, res) => {
   if (io) {
     io.to(`conv:${conversationId}`).emit('message:new', msg);
   }
+  // Send web push to offline members
+  try {
+    const members = await prisma.conversationMember.findMany({ where: { conversationId }, include: { user: true } });
+    const offlineUserIds = members.map((m) => m.user).filter((u) => u.id !== req.userId).map((u) => u.id);
+    const subs = await prisma.pushSubscription.findMany({ where: { userId: { in: offlineUserIds } } });
+    if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+      webpush.setVapidDetails(env.VAPID_SUBJECT, process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+      await Promise.all(subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } } as any, JSON.stringify({ title: 'New message', body: msg.text ?? msg.type.toLowerCase(), tag: conversationId })).catch(() => undefined)));
+    }
+  } catch {}
   res.status(201).json(msg);
 });
 
