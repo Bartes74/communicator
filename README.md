@@ -59,6 +59,22 @@ Presence i „ostatnio widziany”:
   - na logowaniu i `GET /api/users/me`
   - przy rozłączeniu ostatniego połączenia Socket.IO danego użytkownika
 
+Wiadomości – edycja, usuwanie, reakcje, paginacja:
+- HTTP:
+  - `GET /api/messages/:conversationId?take=50&cursor=<messageId>` – paginacja (zwraca `{ items, nextCursor }`), element `items[].reactions`
+  - `POST /api/messages/:conversationId` – wysyłka wiadomości tekstowej `{ text, replyToId? }`
+  - `PATCH /api/messages/item/:messageId` – edycja wiadomości (autor lub admin) `{ text }`
+  - `DELETE /api/messages/item/:messageId` – soft delete (autor lub admin)
+  - `POST /api/messages/item/:messageId/reactions` – dodanie reakcji `{ emoji }`
+  - `DELETE /api/messages/item/:messageId/reactions?emoji=...` – usunięcie własnej reakcji
+- Socket.IO (po dołączeniu do pokoju `conversation:join` → `conv:<conversationId>`):
+  - `message:new` payload: pełny obiekt wiadomości
+  - `message:edited` payload: pełny obiekt wiadomości po edycji
+  - `message:deleted` payload: `{ id, conversationId }`
+  - `reaction:added` payload: obiekt reakcji
+  - `reaction:removed` payload: `{ messageId, userId, emoji }`
+  - `typing` payload: `{ conversationId, userId, typing: boolean }` (emitowane po `typing:start/stop`)
+
 Socket.IO:
 - Rezerwacja pod zdarzenia: wiadomości realtime, typing, itp.
 

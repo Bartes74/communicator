@@ -3,8 +3,9 @@ import { Server as SocketIOServer } from 'socket.io';
 import { env } from './config/env';
 import { createApp } from './app';
 import jwt from 'jsonwebtoken';
-import { markOnline, markOffline, isOnline } from './modules/user/presence';
+import { markOnline, markOffline } from './modules/user/presence';
 import { PrismaClient } from '@prisma/client';
+import { setIO } from './realtime';
 
 const app = createApp();
 const server = http.createServer(app);
@@ -15,6 +16,7 @@ const io = new SocketIOServer(server, {
     credentials: true,
   },
 });
+setIO(io);
 
 const prisma = new PrismaClient();
 
@@ -35,6 +37,20 @@ io.on('connection', async (socket) => {
   markOnline(userId);
   io.emit('presence:online', { userId, online: true });
   try { await prisma.user.update({ where: { id: userId }, data: { status: 'ONLINE' } }); } catch {}
+
+  // Rooms: conversations
+  socket.on('conversation:join', (conversationId: string) => {
+    socket.join(`conv:${conversationId}`);
+  });
+  socket.on('conversation:leave', (conversationId: string) => {
+    socket.leave(`conv:${conversationId}`);
+  });
+  socket.on('typing:start', (conversationId: string) => {
+    socket.to(`conv:${conversationId}`).emit('typing', { conversationId, userId, typing: true });
+  });
+  socket.on('typing:stop', (conversationId: string) => {
+    socket.to(`conv:${conversationId}`).emit('typing', { conversationId, userId, typing: false });
+  });
 
   socket.on('disconnect', async () => {
     const remaining = markOffline(userId);
