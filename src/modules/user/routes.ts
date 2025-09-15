@@ -29,7 +29,9 @@ const upload = multer({
 });
 
 function requireAuth(req: any, res: any, next: any) {
-  const token = req.cookies?.token;
+  const auth = req.headers['authorization'] as string | undefined;
+  const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : undefined;
+  const token = bearer ?? req.cookies?.token;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   try {
     const payload = jwt.verify(token, env.JWT_SECRET) as { sub: string };

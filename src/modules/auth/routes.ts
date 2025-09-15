@@ -72,7 +72,7 @@ router.post('/register', async (req, res) => {
 
   const token = jwt.sign({ sub: user.id }, env.JWT_SECRET, { expiresIn: '7d' });
   res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: env.NODE_ENV === 'production', maxAge: 7 * 24 * 3600 * 1000 });
-  return res.status(201).json({ id: user.id, username: user.username, displayName: user.displayName, dmId: dm.id });
+  return res.status(201).json({ id: user.id, username: user.username, displayName: user.displayName, dmId: dm.id, token });
 });
 
 const loginSchema = z.object({
@@ -98,7 +98,7 @@ router.post('/login', async (req, res) => {
   await prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } });
   const token = jwt.sign({ sub: user.id }, env.JWT_SECRET, { expiresIn: '7d' });
   res.cookie('token', token, { httpOnly: true, sameSite: 'lax', secure: env.NODE_ENV === 'production', maxAge: 7 * 24 * 3600 * 1000 });
-  return res.json({ id: user.id, username: user.username, displayName: user.displayName });
+  return res.json({ id: user.id, username: user.username, displayName: user.displayName, token });
 });
 
 router.post('/logout', async (_req, res) => {

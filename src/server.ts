@@ -22,7 +22,15 @@ const prisma = new PrismaClient();
 
 io.use((socket, next) => {
   try {
-    const token = socket.handshake.auth?.token as string | undefined;
+    let token = socket.handshake.auth?.token as string | undefined;
+    if (!token) {
+      const cookieHeader = socket.handshake.headers.cookie;
+      if (cookieHeader) {
+        const parts = cookieHeader.split(';').map((p) => p.trim());
+        const tokenPart = parts.find((p) => p.startsWith('token='));
+        if (tokenPart) token = tokenPart.split('=')[1];
+      }
+    }
     if (!token) return next(new Error('Unauthorized'));
     const payload = jwt.verify(token, env.JWT_SECRET) as { sub: string };
     (socket as any).userId = payload.sub;
